@@ -1,13 +1,10 @@
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
-import numpy as np
 import os
 import streamlit as st
-import matplotlib.pyplot as plt
 import altair as alt
 from rake_nltk import Rake
-from nltk.corpus import stopwords
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import CountVectorizer
 
@@ -24,6 +21,7 @@ class DataMaker:
         self.num_rated = []
         self.difficulty = []
         self.enrolled = []
+        self.skills = []  # New attribute to store skills
 
     def scrape_features(self, page_url):
         course_list_page = requests.get(page_url)
@@ -70,6 +68,12 @@ class DataMaker:
         difficulty = course_list_soup.select(".difficulty")
         for i in range(10):
             self.difficulty.append(difficulty[i].text)
+        
+        # Scrape and store skills data
+        cskills = course_list_soup.find_all("span", "_x4x75x")
+        for idx in range(10):
+            temp = ",".join([cskills[idx].text for skill in cskills])
+            self.skills.append(temp)
 
     def crawler(self):
         for page in range(self.first_page, self.last_page+1):
@@ -87,7 +91,8 @@ class DataMaker:
             "Course Rating":self.ratings,
             "Course Rated By":self.num_rated,
             "Enrolled Student Count":self.enrolled,
-            "Course Difficulty":self.difficulty
+            "Course Difficulty":self.difficulty,
+            "Skills": self.skills  # Add skills to the data dictionary
         }
         data = pd.DataFrame(data_dict)
         return data
@@ -105,16 +110,11 @@ class DataHunter:
     def scrape_features(self, page_url):
         course_page = requests.get(page_url)
         course_soup = BeautifulSoup(course_page.content, 'html.parser')
-        try:
-            cskills = course_soup.find_all("span", "_x4x75x")
-            temp = ""
-            for idx in range(len(cskills)):
-                temp = temp + cskills[idx].text
-                if(idx != len(cskills)-1):
-                    temp = temp + ","
-            self.skills.append(temp)
-        except:
-            self.skills.append("Missing")
+        
+        # Scrape and store skills data
+        cskills = course_soup.find_all("span", "_x4x75x")
+        temp = ",".join([cskills[idx].text for skill in cskills])
+        self.skills.append(temp)
 
         try:
             cdescr = course_soup.select(".description")
@@ -174,6 +174,7 @@ class DataHunter:
         }
         data = pd.DataFrame(data_dict)
         return data
+
 
 @st.cache_data()
 def load_data():
@@ -263,7 +264,7 @@ def prep_for_cbr(df):
              " based on Content-based recommendation. The learner can choose"
              " any course that has been filtered on the basis of their skills"
              " in the previous section.")
-    st.write("Choose course from 'Select Course' dropdown on the sidebar")
+    st.write("Enter skills in the input box below separated by commas.")
 
     skills_avail = set()
     for i in range(len(df)):
@@ -272,7 +273,12 @@ def prep_for_cbr(df):
         except TypeError:
             pass
 
-    skills_select = st.sidebar.multiselect("Select Skills", list(skills_avail))
+    skills_input = st.sidebar.text_input("Enter Skills", "", placeholder="e.g., Python, Data Analysis", key='skills_input')
+    if skills_input:
+        skills_select = [s.strip() for s in skills_input.split(",")]
+    else:
+        skills_select = []
+
     skill_filtered = filter(df, skills_select, 'Skills', 'Course URL')
     skill_filtered = df[df['Course URL'].isin(skill_filtered)].reset_index()
 
@@ -297,11 +303,16 @@ def prep_for_cbr(df):
     if len(courses) <= 2:
         st.write("*There should be at least 3 courses. Do add more.*")
 
-    input_course = st.sidebar.selectbox("Select Course", courses, key='courses')
+    input_course = st.sidebar.selectbox("Select Course", list(courses), key='courses')
 
-    rec_radio = st.sidebar.radio("Recommend Similar Courses", ('no', 'yes'), index=0)
-    if rec_radio == 'yes':
-        content_based_recommendations(df, input_course, courses)
+    if input_course == "":
+        st.write("Please select a course from the dropdown")
+    else:
+        rec_radio = st.sidebar.radio("Recommend Similar Courses", ('no', 'yes'), index=0)
+        if rec_radio == 'yes':
+            content_based_recommendations(df, input_course, courses)
+
+
 
 def filter(dataframe, chosen_options, feature, id):
     selected_records = []
@@ -316,33 +327,46 @@ def filter(dataframe, chosen_options, feature, id):
 
 def main():
     st.title("Coursera Courses Explorer")
-    st.sidebar.title("Set your Parameters")
-    st.sidebar.header("Preliminary Inspection")
-    st.header("About the Project")
-    st.write("This app allows you to explore courses on Coursera.")
-    st.write("You can filter courses based on your preferences and receive recommendations.")
-    st.write("Select parameters on the sidebar and view results below.")
-    df = load_data()
-    st.header("Dataset Overview")
-    if st.sidebar.checkbox("Show raw data", key='disp_data'):
-        st.write(df)
-    st.markdown("### Features Description:")
-    st.write("**Course URL:** URL to the course homepage")
-    st.write("**Course Name:** Name of the course")
-    st.write("**Learning Product Type:** Course, Professional Certificate, or Specialization")
-    st.write("**Course Provided By:** Partner providing the course")
-    st.write("**Course Rating:** Overall rating of the course")
-    st.write("**Course Rated By:** Number of learners who rated the course")
-    st.write("**Enrolled Student Count:** Number of learners enrolled")
-    st.write("**Course Difficulty:** Difficulty level of the course")
-    st.write("**Skills:** Relevant skills covered in the course")
-    st.write("**Description:** About the course")
-    st.write("**Percentage of New Career Starts:** Learners starting a new career after the course")
-    st.write("**Percentage of Pay Increase or Promotion:** Learners receiving pay increase or promotion after the course")
-    st.write("**Estimated Time to Complete:** Approximate time to complete")
-    st.write("**Instructors:** Instructors of the course")
+    st.sidebar.title("Navigation")
+    option = st.sidebar.radio('Go to', ['Home', 'About','Dataset Overview', 'Content-based Recommendation'])
 
-    prep_for_cbr(df)
+    if option == 'Home':
+        st.header("Welcome to Coursera Courses Explorer")
+        st.write("This app allows you to explore courses on Coursera.")
+        st.write("You can filter courses based on your preferences and receive recommendations.")
+        st.write("Select parameters below and view results.")
+
+    elif option == 'Dataset Overview':
+        st.header("Dataset Overview")
+        df = load_data()
+        if st.sidebar.checkbox("Show raw data", key='disp_data'):
+            st.write(df)
+        st.markdown("### Features Description:")
+        st.write("**Course URL:** URL to the course homepage")
+        st.write("**Course Name:** Name of the course")
+        st.write("**Learning Product Type:** Course, Professional Certificate, or Specialization")
+        st.write("**Course Provided By:** Partner providing the course")
+        st.write("**Course Rating:** Overall rating of the course")
+        st.write("**Course Rated By:** Number of learners who rated the course")
+        st.write("**Enrolled Student Count:** Number of learners enrolled")
+        st.write("**Course Difficulty:** Difficulty level of the course")
+        st.write("**Skills:** Relevant skills covered in the course")
+        st.write("**Description:** About the course")
+        st.write("**Percentage of New Career Starts:** Learners starting a new career after the course")
+        st.write("**Percentage of Pay Increase or Promotion:** Learners receiving pay increase or promotion after the course")
+        st.write("**Estimated Time to Complete:** Approximate time to complete")
+        st.write("**Instructors:** Instructors of the course")
+
+    elif option == 'Content-based Recommendation':
+        df = load_data()
+        prep_for_cbr(df)
+
+    elif option == 'About':
+        st.header("About")
+        st.write("This web app is created by Ayush Katre.")
+        st.write("The app allows users to explore courses on Coursera, filter them based on their preferences, and receive recommendations.")
+        st.write("It is developed using Streamlit, BeautifulSoup, Pandas, and other Python libraries.")
+
 
 if __name__ == "__main__":
     main()
