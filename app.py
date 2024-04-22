@@ -10,10 +10,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 import nltk
 nltk.download('stopwords')
 nltk.data.path.append("/path/to/nltk_data")
-
 from nltk.tokenize import sent_tokenize
-
-# Load the sentence tokenizer once
 nltk.download('punkt')
 
 
@@ -262,7 +259,6 @@ def content_based_recommendations(df, input_course, courses):
     st.write(temp_sim)
     st.write("Top 5 most dissimilar courses")
     st.write(temp_dissim)
-
 
 def recommendations(df, input_course, cosine_sim, find_similar=True, how_many=5):
     recommended = []
