@@ -1,3 +1,5 @@
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import linear_kernel
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
@@ -5,12 +7,9 @@ import os
 import streamlit as st
 import altair as alt
 from rake_nltk import Rake
-from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.feature_extraction.text import CountVectorizer
 import nltk
 nltk.download('stopwords')
 nltk.download('punkt')
-
 
 
 class DataMaker:
@@ -180,8 +179,6 @@ class DataHunter:
         data = pd.DataFrame(data_dict)
         return data
 
-
-@st.cache_data()
 def load_data():
     source_path1 = os.path.join("coursera-courses-overview.csv")
     source_path2 = os.path.join("coursera-individual-courses.csv")
@@ -189,74 +186,6 @@ def load_data():
     df_individual = pd.read_csv(source_path2)
     df = pd.concat([df_overview, df_individual], axis=1)
     return df
-
-def content_based_recommendations(df, input_course, courses):
-    # Filter DataFrame to include only selected courses
-    selected_courses_df = df[df['Course Name'].isin(courses)].reset_index(drop=True)
-    
-    # Extract keywords from course descriptions
-    selected_courses_df['descr_keywords'] = extract_keywords(selected_courses_df, 'Description')
-
-    # Check if any course descriptions are empty or contain only stop words
-    non_empty_indices = selected_courses_df[selected_courses_df['descr_keywords'].apply(lambda x: len(x) > 0)].index
-
-    if len(non_empty_indices) == 0:
-        st.write("No valid course descriptions found for vectorization.")
-        return
-
-    # Vectorize the non-empty course descriptions
-    count = CountVectorizer()
-    count_matrix = count.fit_transform(selected_courses_df['descr_keywords'][non_empty_indices])
-
-    if count_matrix.shape[0] == 0:
-        st.write("No valid documents found for vectorization.")
-        return
-
-    # Calculate cosine similarity
-    cosine_sim = cosine_similarity(count_matrix, count_matrix)
-
-    # Get recommendations
-    rec_courses_similar = recommendations(selected_courses_df, input_course, cosine_sim, True)
-    rec_courses_dissimilar = recommendations(selected_courses_df, input_course, cosine_sim, False)
-
-    st.write("Top 5 most similar courses")
-    st.write(selected_courses_df[selected_courses_df['Course Name'].isin(rec_courses_similar)])
-    st.write("Top 5 most dissimilar courses")
-    st.write(selected_courses_df[selected_courses_df['Course Name'].isin(rec_courses_dissimilar)])
-
-    df = df[df['Course Name'].isin(courses)].reset_index()
-
-    # Extract keywords from course descriptions
-    df['descr_keywords'] = extract_keywords(df, 'Description')
-    
-    # Check if any course descriptions are empty or contain only stop words
-    non_empty_indices = df[df['descr_keywords'].apply(lambda x: len(x) > 0)].index
-    
-    if len(non_empty_indices) == 0:
-        st.write("No valid course descriptions found for vectorization.")
-        return
-    
-    # Vectorize the non-empty course descriptions
-    count = CountVectorizer()
-    count_matrix = count.fit_transform(df['descr_keywords'][non_empty_indices])
-    
-    if count_matrix.shape[0] == 0:
-        st.write("No valid documents found for vectorization.")
-        return
-    
-    # Calculate cosine similarity
-    cosine_sim = cosine_similarity(count_matrix, count_matrix)
-    
-    # Get recommendations
-    rec_courses_similar = recommendations(df, input_course, cosine_sim, True)
-    temp_sim = df[df['Course Name'].isin(rec_courses_similar)]
-    rec_courses_dissimilar = recommendations(df, input_course, cosine_sim, False)
-    temp_dissim = df[df['Course Name'].isin(rec_courses_dissimilar)]
-
-    st.write("Top 5 most similar courses")
-    st.write(temp_sim)
-    st.write("Top 5 most dissimilar courses")
-    st.write(temp_dissim)
 
 def recommendations(df, input_course, cosine_sim, find_similar=True, how_many=5):
     recommended = []
@@ -290,6 +219,16 @@ def extract_keywords(df, feature):
 
     return keyword_lists
 
+def filter(dataframe, chosen_options, feature, id):
+    selected_records = []
+    for i in range(len(dataframe)):
+        # Check if the value is iterable (i.e., not float)
+        if isinstance(dataframe[feature][i], str):
+            for op in chosen_options:
+                if op in dataframe[feature][i]:
+                    selected_records.append(dataframe[id][i])
+    return selected_records
+
 def prep_for_cbr(df):
     st.header("Content-based Recommendation")
     st.sidebar.header("Filter on Preferences")
@@ -310,7 +249,8 @@ def prep_for_cbr(df):
         except TypeError:
             pass
 
-    skills_input = st.sidebar.text_input("Enter Skills", "", placeholder="e.g., Python, Data Analysis", key='skills_input')
+    skills_input_key = f'skills_input_{i}'  # Dynamic key
+    skills_input = st.sidebar.text_input("Enter Skills", "", placeholder="e.g., Python, Data Analysis", key=skills_input_key)
     if skills_input:
         skills_select = [s.strip() for s in skills_input.split(",")]
     else:
@@ -340,32 +280,60 @@ def prep_for_cbr(df):
     if len(courses) <= 2:
         st.write("*There should be at least 3 courses. Do add more.*")
 
-    input_course = st.sidebar.selectbox("Select Course", list(courses), key='courses')
+    input_course_key = f'courses_select_{i}'  # Dynamic key
+    input_course = st.sidebar.selectbox("Select Course", list(courses), key=input_course_key)
 
     if input_course == "":
         st.write("Please select a course from the dropdown")
     else:
-        rec_radio = st.sidebar.radio("Recommend Similar Courses", ('no', 'yes'), index=0)
-        if rec_radio == 'yes':
-            content_based_recommendations(df, input_course, courses)
+        rec_radio_key = f'rec_radio_{i}'  # Dynamic key
+        rec_radio = st.sidebar.radio("Recommend Similar or Dissimilar Courses", ('Similar', 'Dissimilar'), index=0, key=rec_radio_key)
+        if rec_radio == 'Similar':
+            content_based_recommendations(df, input_course, courses, n_recommendations=5, similar=True)
+        elif rec_radio == 'Dissimilar':
+            content_based_recommendations(df, input_course, courses, n_recommendations=5, similar=False)
 
+# Define content-based recommendation function
+def content_based_recommendations(df, input_course, courses, n_recommendations=5, similar=True):
+    if len(courses) == 0:
+        st.write("No courses available for recommendation based on the selected filters.")
+        return
 
+    # Initialize TF-IDF Vectorizer
+    tfidf_vectorizer = TfidfVectorizer(stop_words='english')
+    tfidf_matrix = tfidf_vectorizer.fit_transform(df['Skills'].fillna(''))
 
-def filter(dataframe, chosen_options, feature, id):
-    selected_records = []
-    for i in range(len(dataframe)):
-        # Check if the value is iterable (i.e., not float)
-        if isinstance(dataframe[feature][i], str):
-            for op in chosen_options:
-                if op in dataframe[feature][i]:
-                    selected_records.append(dataframe[id][i])
-    return selected_records
+    # Calculate cosine similarity
+    cosine_sim = linear_kernel(tfidf_matrix, tfidf_matrix)
 
+    # Get the index of the course
+    idx = courses[courses == input_course].index[0]
+
+    # Get similarity scores
+    sim_scores = list(enumerate(cosine_sim[idx]))
+
+    # Sort the courses based on similarity scores
+    sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
+
+    # Get top similar courses
+    if similar:
+        sim_scores = sim_scores[1:n_recommendations + 1]  # Exclude the input course itself
+    else:
+        sim_scores = sim_scores[-n_recommendations:]  # Get least similar courses
+
+    # Get the course indices
+    course_indices = [i[0] for i in sim_scores]
+
+    # Return recommended courses
+    recommended_courses = df.iloc[course_indices]['Course Name'].values
+    st.write("### Recommended Courses:")
+    for course in recommended_courses:
+        st.write(course)
 
 def main():
     st.title("Coursera Courses Explorer")
     st.sidebar.title("Navigation")
-    option = st.sidebar.radio('Go to', ['Home', 'About','Dataset Overview', 'Content-based Recommendation'])
+    option = st.sidebar.radio('Go to', ['Home', 'About', 'Dataset Overview', 'Content-based Recommendation'], key='sidebar_radio')
 
     if option == 'Home':
         st.header("Welcome to Coursera Courses Explorer")
@@ -403,7 +371,6 @@ def main():
         st.write("This web app is created by Ayush Katre.")
         st.write("The app allows users to explore courses on Coursera, filter them based on their preferences, and receive recommendations.")
         st.write("It is developed using Streamlit, BeautifulSoup, Pandas, and other Python libraries.")
-
 
 
 if __name__ == "__main__":
