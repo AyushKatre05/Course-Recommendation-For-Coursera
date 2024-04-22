@@ -8,6 +8,7 @@ from rake_nltk import Rake
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import CountVectorizer
 import nltk
+nltk.download('stopwords')
 nltk.data.path.append("/path/to/nltk_data")
 
 class DataMaker:
