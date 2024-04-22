@@ -11,6 +11,19 @@ import nltk
 nltk.download('stopwords')
 nltk.data.path.append("/path/to/nltk_data")
 
+from nltk.tokenize import sent_tokenize
+
+# Load the sentence tokenizer once
+nltk.download('punkt')
+
+def extract_keywords(df, feature):
+    r = Rake()
+    r.extract_keywords_from_text(df[feature])
+
+def content_based_recommendations(df, input_course, courses):
+    selected_courses_df = df[df['Course Name'].isin(courses)].reset_index(drop=True)
+    selected_courses_df['descr_keywords'] = extract_keywords(selected_courses_df, 'Description')
+
 class DataMaker:
     def __init__(self, site, first_page, last_page):
         self.site_url = site
