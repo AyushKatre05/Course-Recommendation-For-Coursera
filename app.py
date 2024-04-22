@@ -188,6 +188,39 @@ def load_data():
     return df
 
 def content_based_recommendations(df, input_course, courses):
+    # Filter DataFrame to include only selected courses
+    selected_courses_df = df[df['Course Name'].isin(courses)].reset_index(drop=True)
+    
+    # Extract keywords from course descriptions
+    selected_courses_df['descr_keywords'] = extract_keywords(selected_courses_df, 'Description')
+
+    # Check if any course descriptions are empty or contain only stop words
+    non_empty_indices = selected_courses_df[selected_courses_df['descr_keywords'].apply(lambda x: len(x) > 0)].index
+
+    if len(non_empty_indices) == 0:
+        st.write("No valid course descriptions found for vectorization.")
+        return
+
+    # Vectorize the non-empty course descriptions
+    count = CountVectorizer()
+    count_matrix = count.fit_transform(selected_courses_df['descr_keywords'][non_empty_indices])
+
+    if count_matrix.shape[0] == 0:
+        st.write("No valid documents found for vectorization.")
+        return
+
+    # Calculate cosine similarity
+    cosine_sim = cosine_similarity(count_matrix, count_matrix)
+
+    # Get recommendations
+    rec_courses_similar = recommendations(selected_courses_df, input_course, cosine_sim, True)
+    rec_courses_dissimilar = recommendations(selected_courses_df, input_course, cosine_sim, False)
+
+    st.write("Top 5 most similar courses")
+    st.write(selected_courses_df[selected_courses_df['Course Name'].isin(rec_courses_similar)])
+    st.write("Top 5 most dissimilar courses")
+    st.write(selected_courses_df[selected_courses_df['Course Name'].isin(rec_courses_dissimilar)])
+
     df = df[df['Course Name'].isin(courses)].reset_index()
 
     # Extract keywords from course descriptions
