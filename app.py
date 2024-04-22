@@ -16,9 +16,6 @@ from nltk.tokenize import sent_tokenize
 # Load the sentence tokenizer once
 nltk.download('punkt')
 
-def extract_keywords(df, feature):
-    r = Rake()
-    r.extract_keywords_from_text(df[feature])
 
 
 class DataMaker:
