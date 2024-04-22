@@ -405,5 +405,48 @@ def main():
         st.write("It is developed using Streamlit, BeautifulSoup, Pandas, and other Python libraries.")
 
 
+    st.title("Coursera Courses Explorer")
+    st.sidebar.title("Navigation")
+    option = st.sidebar.radio('Go to', ['Home', 'About','Dataset Overview', 'Content-based Recommendation'])
+
+    if option == 'Home':
+        st.header("Welcome to Coursera Courses Explorer")
+        st.write("This app allows you to explore courses on Coursera.")
+        st.write("You can filter courses based on your preferences and receive recommendations.")
+        st.write("Select parameters below and view results.")
+
+    elif option == 'Dataset Overview':
+        st.header("Dataset Overview")
+        df = load_data()
+        if st.sidebar.checkbox("Show raw data", key='disp_data'):
+            st.write(df)
+        st.markdown("### Features Description:")
+        st.write("**Course URL:** URL to the course homepage")
+        st.write("**Course Name:** Name of the course")
+        st.write("**Learning Product Type:** Course, Professional Certificate, or Specialization")
+        st.write("**Course Provided By:** Partner providing the course")
+        st.write("**Course Rating:** Overall rating of the course")
+        st.write("**Course Rated By:** Number of learners who rated the course")
+        st.write("**Enrolled Student Count:** Number of learners enrolled")
+        st.write("**Course Difficulty:** Difficulty level of the course")
+        st.write("**Skills:** Relevant skills covered in the course")
+        st.write("**Description:** About the course")
+        st.write("**Percentage of New Career Starts:** Learners starting a new career after the course")
+        st.write("**Percentage of Pay Increase or Promotion:** Learners receiving pay increase or promotion after the course")
+        st.write("**Estimated Time to Complete:** Approximate time to complete")
+        st.write("**Instructors:** Instructors of the course")
+
+    elif option == 'Content-based Recommendation':
+        df = load_data()
+        prep_for_cbr(df)
+
+    elif option == 'About':
+        st.header("About")
+        st.write("This web app is created by Ayush Katre.")
+        st.write("The app allows users to explore courses on Coursera, filter them based on their preferences, and receive recommendations.")
+        st.write("It is developed using Streamlit, BeautifulSoup, Pandas, and other Python libraries.")
+
+
+
 if __name__ == "__main__":
     main()
