@@ -20,6 +20,7 @@ def extract_keywords(df, feature):
     r = Rake()
     r.extract_keywords_from_text(df[feature])
 
+
 class DataMaker:
     def __init__(self, site, first_page, last_page):
         self.site_url = site
